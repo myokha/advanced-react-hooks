@@ -13,9 +13,6 @@ import {
 // 🐨 this is going to be our generic asyncReducer
 function asyncReducer(state, action) {
   switch (action.type) {
-    case 'idle': {
-      return {status: 'idle', data: null, error: null}
-    }
     case 'pending': {
       // 🐨 replace "pokemon" with "data"
       return {status: 'pending', data: null, error: null}
@@ -35,15 +32,26 @@ function asyncReducer(state, action) {
 }
 
 function useAsync(initialState = {}) {
-  const [state, dispatch] = React.useReducer(asyncReducer, {
+  const [state, unsafeDispatch] = React.useReducer(asyncReducer, {
     status: 'idle',
     // 🐨 this will need to be "data" instead of "pokemon"
     data: null,
     error: null,
     ...initialState,
   })
-  const checkMounted = React.useCallback(isMounted => {
-    if (!isMounted) dispatch({type: 'idle'})
+
+  const mounted = React.useRef(false)
+
+  const dispatch = (...args) => {
+    if (mounted.current) unsafeDispatch(...args)
+  }
+
+  React.useEffect(() => {
+    mounted.current = true
+
+    return () => {
+      mounted.current = false
+    }
   }, [])
 
   const run = React.useCallback(promise => {
@@ -61,7 +69,7 @@ function useAsync(initialState = {}) {
     )
   }, [])
 
-  return {...state, run, checkMounted}
+  return {...state, run}
 }
 
 function PokemonInfo({pokemonName}: {pokemonName: string}) {
@@ -70,14 +78,7 @@ function PokemonInfo({pokemonName}: {pokemonName: string}) {
     status,
     error,
     run,
-    checkMounted,
   } = useAsync({status: pokemonName ? 'pending' : 'idle'})
-
-  React.useEffect(() => {
-    checkMounted(true)
-
-    return () => checkMounted(false)
-  }, [checkMounted])
 
   React.useEffect(() => {
     if (!pokemonName) return
